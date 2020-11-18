@@ -1,12 +1,49 @@
-﻿<Window x:Class="SR3DCameraDemo.MainWindow"
+﻿<Controls:MetroWindow x:Class="SR3DCameraDemo.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:SR3DCameraDemo"
+        xmlns:Controls="clr-namespace:MahApps.Metro.Controls;assembly=MahApps.Metro"
+        xmlns:i="clr-namespace:System.Windows.Interactivity;assembly=System.Windows.Interactivity"
+        xmlns:View="clr-namespace:SR3DCameraDemo.View"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
+        Title="{Binding Version,StringFormat=SR3DCameraDemo {0}}" Icon="3d_printer_64px_1202440_easyicon.net.ico"
+Height="600" Width="800" WindowStartupLocation ="CenterScreen" ResizeMode="CanResize" Closing="MetroWindow_Closing">
+    <Controls:MetroWindow.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="View\Dictionary1.xaml"></ResourceDictionary>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Controls:MetroWindow.Resources>
+    <i:Interaction.Triggers>
+        <i:EventTrigger EventName="Loaded">
+            <i:InvokeCommandAction Command="{Binding AppLoadedEventCommand}" />
+        </i:EventTrigger>
+    </i:Interaction.Triggers>
     <Grid>
-        
+        <Grid.RowDefinitions>
+            <RowDefinition Height="30"></RowDefinition>
+            <RowDefinition></RowDefinition>
+            <RowDefinition Height="30"></RowDefinition>
+        </Grid.RowDefinitions>
+        <Menu VerticalAlignment="Center">
+            <MenuItem Header="主页" Command="{Binding MenuActionCommand}" CommandParameter="0"></MenuItem>
+            <MenuItem Header="参数" Command="{Binding MenuActionCommand}" CommandParameter="1"></MenuItem>
+        </Menu>
+        <Grid Grid.Row="1">
+            <View:HomePage Visibility="{Binding HomePageVisibility}"></View:HomePage>
+            <!--<View:ParameterPage Visibility="{Binding ParameterPageVisibility,FallbackValue=Collapsed}"></View:ParameterPage>-->
+        </Grid>
+        <StatusBar Grid.Row="2">
+            <StatusBarItem>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock VerticalAlignment="Center">3DCam</TextBlock>
+                    <Ellipse Style="{StaticResource EllipseStatusCamera}"></Ellipse>
+                </StackPanel>
+            </StatusBarItem>
+            
+        </StatusBar>
     </Grid>
-</Window>
+</Controls:MetroWindow>
