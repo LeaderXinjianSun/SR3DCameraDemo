@@ -1,14 +1,17 @@
 ﻿using HalconDotNet;
 using Microsoft.Practices.Prism.Commands;
 using Microsoft.Practices.Prism.ViewModel;
+using SR3DCameraDemo.Model;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
+using System.Windows.Forms;
 using ViewROI;
 
 namespace SR3DCameraDemo.ViewModel
@@ -110,6 +113,32 @@ namespace SR3DCameraDemo.ViewModel
         public DelegateCommand AppLoadedEventCommand { get; set; }
         public DelegateCommand<object> OperateButtonCommand { get; set; }
         #endregion
+        #region 变量
+        /*******接口函数返回值**********/
+        int SR7IF_ERROR_NOT_FOUND = (-999);                  // Item is not found.
+        int SR7IF_ERROR_COMMAND = (-998);                  // Command not recognized.
+        int SR7IF_ERROR_PARAMETER = (-997);                  // Parameter is invalid.
+        int SR7IF_ERROR_UNIMPLEMENTED = (-996);                  // Feature not implemented.
+        int SR7IF_ERROR_HANDLE = (-995);                  // Handle is invalid.
+        int SR7IF_ERROR_MEMORY = (-994);                  // Out of memory.
+        int SR7IF_ERROR_TIMEOUT = (-993);                  // Action timed out.
+        int SR7IF_ERROR_DATABUFFER = (-992);                  // Buffer not large enough for data.
+        int SR7IF_ERROR_STREAM = (-991);                  // Error in stream.
+        int SR7IF_ERROR_CLOSED = (-990);                  // Resource is no longer avaiable.
+        int SR7IF_ERROR_VERSION = (-989);                  // Invalid version number.
+        int SR7IF_ERROR_ABORT = (-988);                  // Operation aborted.
+        int SR7IF_ERROR_ALREADY_EXISTS = (-987);                  // Conflicts with existing item.
+        int SR7IF_ERROR_FRAME_LOSS = (-986);                  // Loss of frame.
+        int SR7IF_ERROR_ROLL_DATA_OVERFLOW = (-985);                  // Continue mode Data overflow.
+        int SR7IF_ERROR_ROLL_BUSY = (-984);                  // Read Busy.
+        int SR7IF_ERROR_MODE = (-983);                  // Err mode.
+        int SR7IF_ERROR_CAMERA_NOT_ONLINE = (-982);                  // Camera not online.
+        int SR7IF_ERROR = (-1);                    // General error.
+        int SR7IF_OK = (0);                     // Operation successful.
+        int SR7IF_NORMAL_STOP = (-100);                  //A normal stop caused by external IO or other causes
+
+        static int[] HeightData = null;        //高度数据缓存
+        #endregion
         #region 构造函数
         public MainWindowViewModel()
         {
@@ -125,7 +154,26 @@ namespace SR3DCameraDemo.ViewModel
 
         private void AppLoadedEventCommandExecute()
         {
-            AddMessage("软件加载完成");
+            #region 3D相机初始化
+            SR7IF_ETHERNET_CONFIG _ethernetConfig;
+            int _currentDeviceId = 0;
+            _ethernetConfig.abyIpAddress = new Byte[] { 192, 168, 0, 10 };
+            int Rc = SR7LinkFunc.SR7IF_EthernetOpen(_currentDeviceId, ref _ethernetConfig);
+            if (Rc == 0)
+            {
+                AddMessage("3D相机连接成功");
+                //获取型号判断高度范围
+                IntPtr str_Model = SR7LinkFunc.SR7IF_GetModels(_currentDeviceId);
+                String s_model = Marshal.PtrToStringAnsi(str_Model);
+                HeightData = new int[15000 * 6400];
+                for (int i = 0; i < HeightData.Length; i++)
+                {
+                    HeightData[i] = -1000000;
+                }
+            }
+
+                #endregion
+                AddMessage("软件加载完成");
         }
 
         private void OperateButtonCommandExecute(object obj)
@@ -133,17 +181,80 @@ namespace SR3DCameraDemo.ViewModel
             switch (obj.ToString())
             {
                 case "0":
-                    Random rd = new Random();
-                    int[] _BatchData = new int[800*560];
-                    for (int i = 0; i < 560; i++)
+                    int _currentDeviceId = 0;
+                    IntPtr DataObject = new IntPtr();
+                    int Rc = -1;
+                    Rc = SR7LinkFunc.SR7IF_StartMeasure(_currentDeviceId, 20000);
+                    // 接收数据
+                    Rc = SR7LinkFunc.SR7IF_ReceiveData(_currentDeviceId, DataObject);
+
+                    if (Rc == SR7IF_ERROR_MODE)
                     {
-                        for (int j = 0; j < 800; j++)
-                        {
-                            _BatchData[i * 800 + j] = rd.Next(-840000, 840000);
-                        }
+                        MessageBox.Show("当前为循环模式!", "提示", MessageBoxButtons.OK);
+                        SR7LinkFunc.SR7IF_StopMeasure(_currentDeviceId);
+                        return;
                     }
-                    var img = BatchDataShow(_BatchData, 8.4, -8.4, 255, 800, 560, 1, 1);
-                    CameraIamge = Bitmap2HImage_24(img);
+                    if (Rc < 0)
+                    {
+                        MessageBox.Show("数据接收失败,返回值：" + Rc.ToString(), "提示", MessageBoxButtons.OK);
+                        return;
+                    }
+                    else
+                    {
+                        // 获取批处理行数
+                        int BatchPointTmp = SR7LinkFunc.SR7IF_ProfilePointCount(_currentDeviceId, DataObject);
+
+
+                        // 获取宽度
+                        int m_DataWidthTmp = SR7LinkFunc.SR7IF_ProfileDataWidth(_currentDeviceId, DataObject);
+
+
+                        // 数据x方向间距(mm)
+                        double m_XPitch = SR7LinkFunc.SR7IF_ProfileData_XPitch(_currentDeviceId, DataObject);
+
+                        int BatchPoint = BatchPointTmp;
+                        int m_DataWidth = m_DataWidthTmp;
+
+                        int Tmpys = Convert.ToInt32(Convert.ToDouble(BatchPoint) / 560 - 0.5);   //Y方向缩放倍数
+                        int Tmpxs = Convert.ToInt32(Convert.ToDouble(m_DataWidth) / 800);        //X方向缩放倍数
+                        if (BatchPoint < 560)
+                            Tmpys = 1;
+                        if (m_DataWidth < 800)
+                            Tmpxs = 1;
+
+                        // 获取高度数据
+                        using (PinnedObject pin = new PinnedObject(HeightData))       //内存自动释放接口
+                        {
+                            Rc = SR7LinkFunc.SR7IF_GetProfileData(_currentDeviceId, DataObject, pin.Pointer);   // pin.Pointer 获取高度数据缓存地址
+
+                            if (Rc < 0)
+                            {
+                                MessageBox.Show("高度数据获取失败", "提示", MessageBoxButtons.OK);
+
+                                for (int i = 0; i < HeightData.Length; i++)
+                                {
+                                    HeightData[i] = -1000000;
+                                }
+                            }
+
+                            // 显示
+
+                            var img = BatchDataShow(HeightData, 8.4, -8.4, 255, m_DataWidth, BatchPoint, Tmpxs, Tmpys);
+                            CameraIamge = Bitmap2HImage_24(img);
+                        }
+
+                    }
+                    //Random rd = new Random();
+                    //int[] _BatchData = new int[800*560];
+                    //for (int i = 0; i < 560; i++)
+                    //{
+                    //    for (int j = 0; j < 800; j++)
+                    //    {
+                    //        _BatchData[i * 800 + j] = rd.Next(-840000, 840000);
+                    //    }
+                    //}
+
+                    
                     break;
                 default:
                     break;

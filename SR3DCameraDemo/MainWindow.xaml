@@ -35,6 +35,7 @@ Height="600" Width="800" WindowStartupLocation ="CenterScreen" ResizeMode="CanRe
         <Grid Grid.Row="1">
             <View:HomePage Visibility="{Binding HomePageVisibility}"></View:HomePage>
             <!--<View:ParameterPage Visibility="{Binding ParameterPageVisibility,FallbackValue=Collapsed}"></View:ParameterPage>-->
+            
         </Grid>
         <StatusBar Grid.Row="2">
             <StatusBarItem>
