@@ -48,8 +48,9 @@
     <Reference Include="halcondotnet">
       <HintPath>C:\Program Files\MVTec\HALCON-13.0\bin\dotnet35\halcondotnet.dll</HintPath>
     </Reference>
-    <Reference Include="HalconViewer">
-      <HintPath>..\packages\Halcon\HalconViewer.dll</HintPath>
+    <Reference Include="HalconViewer, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\resource\Halcon\HalconViewer.dll</HintPath>
     </Reference>
     <Reference Include="MahApps.Metro, Version=2.0.0.0, Culture=neutral, PublicKeyToken=51482d6f650b2b3f, processorArchitecture=MSIL">
       <HintPath>..\packages\MahApps.Metro.2.3.4\lib\net452\MahApps.Metro.dll</HintPath>
@@ -104,8 +105,9 @@
     <Reference Include="System.Xaml">
       <RequiredTargetFramework>4.0</RequiredTargetFramework>
     </Reference>
-    <Reference Include="ViewROI">
-      <HintPath>..\packages\Halcon\ViewROI.dll</HintPath>
+    <Reference Include="ViewROI, Version=1.0.7591.27129, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\resource\Halcon\ViewROI.dll</HintPath>
     </Reference>
     <Reference Include="WindowsBase" />
     <Reference Include="PresentationCore" />

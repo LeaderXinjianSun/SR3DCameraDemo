@@ -343,6 +343,27 @@ namespace SR3DCameraDemo.ViewModel
                         }
                     }
                     break;
+                case "4":
+                    if (pointCloudHead._width != 0)
+                    {
+                        try
+                        {
+                            using (PinnedObject pin = new PinnedObject(HeightData))
+                            {
+                                SR7LinkFunc.SR_3D_EXE_Show(pin.Pointer, pointCloudHead._xInterval, pointCloudHead._yInterval, pointCloudHead._width, pointCloudHead._height, 1, 8.4, -8.4);
+                            }
+                            AddMessage("3D显示成功");
+                        }
+                        catch (Exception ex)
+                        {
+                            AddMessage(ex.Message);
+                        }
+                    }
+                    else
+                    {
+                        AddMessage("3D显示失败：无数据");
+                    }
+                    break;
                 default:
                     break;
             }

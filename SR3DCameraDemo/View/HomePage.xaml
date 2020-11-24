@@ -40,6 +40,7 @@
 
                     <Button Grid.Row="2" Style="{StaticResource MahApps.Styles.Button.Square.Accent}" Content="加载" FontSize="22" Margin="10" Command="{Binding OperateButtonCommand}" CommandParameter="3"></Button>
                     <Button Grid.Row="2" Grid.Column="1" Style="{StaticResource MahApps.Styles.Button.Square.Accent}" Content="保存" FontSize="22" Margin="10" Command="{Binding OperateButtonCommand}" CommandParameter="2"></Button>
+                    <Button Grid.Row="2" Grid.Column="2" Style="{StaticResource MahApps.Styles.Button.Square.Accent}" Content="3D" FontSize="22" Margin="10" Command="{Binding OperateButtonCommand}" CommandParameter="4"></Button>
                 </Grid>
             </GroupBox>
         </Grid>
