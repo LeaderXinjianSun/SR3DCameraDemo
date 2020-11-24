@@ -41,6 +41,18 @@ namespace SR3DCameraDemo.ViewModel
                 this.RaisePropertyChanged("StatusCamera");
             }
         }
+        private bool statusPLC;
+
+        public bool StatusPLC
+        {
+            get { return statusPLC; }
+            set
+            {
+                statusPLC = value;
+                this.RaisePropertyChanged("StatusPLC");
+            }
+        }
+
         private string messageStr;
 
         public string MessageStr
@@ -138,6 +150,9 @@ namespace SR3DCameraDemo.ViewModel
         int SR7IF_NORMAL_STOP = (-100);                  //A normal stop caused by external IO or other causes
 
         static int[] HeightData = null;        //高度数据缓存
+
+        private string iniParameterPath = System.Environment.CurrentDirectory + "\\Parameter.ini";
+        XinjePLCModbusRTU xinje;
         #endregion
         #region 构造函数
         public MainWindowViewModel()
@@ -146,10 +161,20 @@ namespace SR3DCameraDemo.ViewModel
             Version = "20201118";
             MessageStr = "";
             CameraROIList = new ObservableCollection<ROI>();
+            string com = Inifile.INIGetStringValue(iniParameterPath, "PLC", "COM", "COM1");
+            xinje = new XinjePLCModbusRTU(com);
+            xinje.PLC.StateChanged += PLC_StateChanged;
+            xinje.PLC.Connect();
+            StatusPLC = true;
             #endregion
             MenuActionCommand = new DelegateCommand<object>(new Action<object>(this.OperateButtonCommandExecute));
             AppLoadedEventCommand = new DelegateCommand(new Action(this.AppLoadedEventCommandExecute));
             OperateButtonCommand = new DelegateCommand<object>(new Action<object>(this.OperateButtonCommandExecute));
+        }
+
+        private void PLC_StateChanged(object sender, bool e)
+        {
+            StatusPLC = e;
         }
 
         private void AppLoadedEventCommandExecute()
@@ -162,6 +187,7 @@ namespace SR3DCameraDemo.ViewModel
             if (Rc == 0)
             {
                 AddMessage("3D相机连接成功");
+                StatusCamera = true;
                 //获取型号判断高度范围
                 IntPtr str_Model = SR7LinkFunc.SR7IF_GetModels(_currentDeviceId);
                 String s_model = Marshal.PtrToStringAnsi(str_Model);
@@ -173,7 +199,7 @@ namespace SR3DCameraDemo.ViewModel
             }
 
                 #endregion
-                AddMessage("软件加载完成");
+            AddMessage("软件加载完成");
         }
 
         private void OperateButtonCommandExecute(object obj)
@@ -181,80 +207,76 @@ namespace SR3DCameraDemo.ViewModel
             switch (obj.ToString())
             {
                 case "0":
-                    int _currentDeviceId = 0;
-                    IntPtr DataObject = new IntPtr();
-                    int Rc = -1;
-                    Rc = SR7LinkFunc.SR7IF_StartMeasure(_currentDeviceId, 20000);
-                    // 接收数据
-                    Rc = SR7LinkFunc.SR7IF_ReceiveData(_currentDeviceId, DataObject);
-
-                    if (Rc == SR7IF_ERROR_MODE)
+                    Task.Run(() =>
                     {
-                        MessageBox.Show("当前为循环模式!", "提示", MessageBoxButtons.OK);
-                        SR7LinkFunc.SR7IF_StopMeasure(_currentDeviceId);
-                        return;
-                    }
-                    if (Rc < 0)
-                    {
-                        MessageBox.Show("数据接收失败,返回值：" + Rc.ToString(), "提示", MessageBoxButtons.OK);
-                        return;
-                    }
-                    else
-                    {
-                        // 获取批处理行数
-                        int BatchPointTmp = SR7LinkFunc.SR7IF_ProfilePointCount(_currentDeviceId, DataObject);
+                        int _currentDeviceId = 0;
+                        IntPtr DataObject = new IntPtr();
+                        xinje.SetM("M500", true);
+                        AddMessage("触发，并获取图像");
+                        int Rc = -1;
+                        //Rc = SR7LinkFunc.SR7IF_StartMeasure(_currentDeviceId, 20000);
+                        Rc = SR7LinkFunc.SR7IF_StartIOTriggerMeasure(_currentDeviceId, 20000, 0);
 
+                        // 接收数据
+                        Rc = SR7LinkFunc.SR7IF_ReceiveData(_currentDeviceId, DataObject);
 
-                        // 获取宽度
-                        int m_DataWidthTmp = SR7LinkFunc.SR7IF_ProfileDataWidth(_currentDeviceId, DataObject);
-
-
-                        // 数据x方向间距(mm)
-                        double m_XPitch = SR7LinkFunc.SR7IF_ProfileData_XPitch(_currentDeviceId, DataObject);
-
-                        int BatchPoint = BatchPointTmp;
-                        int m_DataWidth = m_DataWidthTmp;
-
-                        int Tmpys = Convert.ToInt32(Convert.ToDouble(BatchPoint) / 560 - 0.5);   //Y方向缩放倍数
-                        int Tmpxs = Convert.ToInt32(Convert.ToDouble(m_DataWidth) / 800);        //X方向缩放倍数
-                        if (BatchPoint < 560)
-                            Tmpys = 1;
-                        if (m_DataWidth < 800)
-                            Tmpxs = 1;
-
-                        // 获取高度数据
-                        using (PinnedObject pin = new PinnedObject(HeightData))       //内存自动释放接口
+                        if (Rc == SR7IF_ERROR_MODE)
                         {
-                            Rc = SR7LinkFunc.SR7IF_GetProfileData(_currentDeviceId, DataObject, pin.Pointer);   // pin.Pointer 获取高度数据缓存地址
-
-                            if (Rc < 0)
-                            {
-                                MessageBox.Show("高度数据获取失败", "提示", MessageBoxButtons.OK);
-
-                                for (int i = 0; i < HeightData.Length; i++)
-                                {
-                                    HeightData[i] = -1000000;
-                                }
-                            }
-
-                            // 显示
-
-                            var img = BatchDataShow(HeightData, 8.4, -8.4, 255, m_DataWidth, BatchPoint, Tmpxs, Tmpys);
-                            CameraIamge = Bitmap2HImage_24(img);
+                            AddMessage("当前为循环模式!");
+                            SR7LinkFunc.SR7IF_StopMeasure(_currentDeviceId);
+                            return;
                         }
+                        if (Rc < 0)
+                        {
+                            AddMessage("数据接收失败,返回值：" + Rc.ToString());
+                            return;
+                        }
+                        else
+                        {
+                            // 获取批处理行数
+                            int BatchPointTmp = SR7LinkFunc.SR7IF_ProfilePointCount(_currentDeviceId, DataObject);
 
-                    }
-                    //Random rd = new Random();
-                    //int[] _BatchData = new int[800*560];
-                    //for (int i = 0; i < 560; i++)
-                    //{
-                    //    for (int j = 0; j < 800; j++)
-                    //    {
-                    //        _BatchData[i * 800 + j] = rd.Next(-840000, 840000);
-                    //    }
-                    //}
+                            // 获取宽度
+                            int m_DataWidthTmp = SR7LinkFunc.SR7IF_ProfileDataWidth(_currentDeviceId, DataObject);
 
-                    
+                            // 数据x方向间距(mm)
+                            double m_XPitch = SR7LinkFunc.SR7IF_ProfileData_XPitch(_currentDeviceId, DataObject);
+
+                            int BatchPoint = BatchPointTmp;
+                            int m_DataWidth = m_DataWidthTmp;
+
+                            int Tmpys = Convert.ToInt32(Convert.ToDouble(BatchPoint) / 1875 - 0.5);   //Y方向缩放倍数
+                            int Tmpxs = Convert.ToInt32(Convert.ToDouble(m_DataWidth) / 800);        //X方向缩放倍数
+                            if (BatchPoint < 1875)
+                                Tmpys = 1;
+                            if (m_DataWidth < 800)
+                                Tmpxs = 1;
+
+                            // 获取高度数据
+                            using (PinnedObject pin = new PinnedObject(HeightData))       //内存自动释放接口
+                            {
+                                Rc = SR7LinkFunc.SR7IF_GetProfileData(_currentDeviceId, DataObject, pin.Pointer);
+                                if (Rc < 0)
+                                {
+                                    AddMessage("高度数据获取失败");
+
+                                    for (int i = 0; i < HeightData.Length; i++)
+                                    {
+                                        HeightData[i] = -1000000;
+                                    }
+                                }// pin.Pointer 获取高度数据缓存地址
+                                var img = BatchDataShow(HeightData, 8.4, -8.4, 255, m_DataWidth, BatchPoint, Tmpxs, Tmpys);
+
+                                // 显示
+                                CameraIamge = Bitmap2HImage_24(img);
+                            }
+                        }
+                    });                    
+                    break;
+                case "1":
+                    xinje.SetM("M500", true);
+                    AddMessage("仅触发");
+
                     break;
                 default:
                     break;
@@ -320,7 +342,7 @@ namespace SR3DCameraDemo.ViewModel
         {
             //颜色区间与高度区间比例
             //抽帧抽点显示
-            int imgH = 560;
+            int imgH = 1875;
             int imgW = 800;
             int TmpX = 0;
             int Tmppx = 0;
@@ -375,10 +397,66 @@ namespace SR3DCameraDemo.ViewModel
             TmpBitmap.UnlockBits(bmpData);
 
             return TmpBitmap;
-            //if (_DeviceID == 0)
-            //    pictureBox1.Image = TmpBitmap;
-            //else if (_DeviceID == 1)
-            //    PicBoxTwo.Image = TmpBitmap;
+        }
+        private int PointToRealData(int[] data, int width, int height, ref float[] realData)
+        {
+            if (data.Length < 1)
+            {
+                return -1;
+            }
+
+            if (height < 1 || width < 1)
+            {
+                return -1;
+            }
+
+            int upper = 0;
+            int lower = 0;
+            calUpperAndLower(data, height, width, ref upper, ref lower);
+
+            for (int i = 0; i < height; ++i)
+            {
+                for (int j = 0; j < width; ++j)
+                {
+                    if (data[i * width + j] >= lower && data[i * width + j] <= upper)
+                    {
+                        realData[i * width + j] = Convert.ToSingle(data[i * width + j]) / 100000;
+                    }
+                    else
+                    {
+                        realData[i * width + j] = -10000;
+                    }
+                }
+            }
+            return 0;
+        }
+        /// <summary>
+		/// 自动计算数据最大值最小值
+		/// </summary>
+		/// <param name="data"></param>
+		/// <param name="height"></param>
+		/// <param name="width"></param>
+		/// <param name="upper"></param>
+		/// <param name="lower"></param>
+		private void calUpperAndLower(int[] data, int height, int width, ref int upper, ref int lower)
+        {
+            int radio = 100000;
+            lower = 100 * radio;
+            upper = -100 * radio;
+            for (int i = 0; i < height * width; ++i)
+            {
+                if (data[i] > -99 * radio && data[i] < 99 * radio)
+                {
+                    if (data[i] < lower)
+                    {
+                        lower = data[i];
+                    }
+                    if (data[i] > upper)
+                    {
+                        upper = data[i];
+                    }
+                }
+            }
         }
         #endregion
     }

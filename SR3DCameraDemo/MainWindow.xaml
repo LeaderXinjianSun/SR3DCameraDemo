@@ -44,7 +44,12 @@ Height="600" Width="800" WindowStartupLocation ="CenterScreen" ResizeMode="CanRe
                     <Ellipse Style="{StaticResource EllipseStatusCamera}"></Ellipse>
                 </StackPanel>
             </StatusBarItem>
-            
+            <StatusBarItem>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock VerticalAlignment="Center">PLC</TextBlock>
+                    <Ellipse Style="{StaticResource EllipseStatusPLC}"></Ellipse>
+                </StackPanel>
+            </StatusBarItem>
         </StatusBar>
     </Grid>
 </Controls:MetroWindow>

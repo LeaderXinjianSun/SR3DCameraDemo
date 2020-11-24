@@ -42,6 +42,9 @@
     <Reference Include="ControlzEx, Version=4.0.0.0, Culture=neutral, PublicKeyToken=69f1c32f803d307e, processorArchitecture=MSIL">
       <HintPath>..\packages\ControlzEx.4.4.0\lib\net45\ControlzEx.dll</HintPath>
     </Reference>
+    <Reference Include="DXHLibrary">
+      <HintPath>..\..\..\..\..\..\类库\DXH\DXHLibrary.dll</HintPath>
+    </Reference>
     <Reference Include="halcondotnet">
       <HintPath>C:\Program Files\MVTec\HALCON-13.0\bin\dotnet35\halcondotnet.dll</HintPath>
     </Reference>
@@ -114,9 +117,12 @@
       <SubType>Designer</SubType>
     </ApplicationDefinition>
     <Compile Include="Global.cs" />
+    <Compile Include="Model\Inifile.cs" />
+    <Compile Include="Model\IPLCCommunication.cs" />
     <Compile Include="Model\Metro.cs" />
     <Compile Include="Model\PinnedObject.cs" />
     <Compile Include="Model\SR7LinkFunc.cs" />
+    <Compile Include="Model\XinjePLCModbusRTU.cs" />
     <Compile Include="ViewModel\MainWindowViewModel.cs" />
     <Compile Include="View\HomePage.xaml.cs">
       <DependentUpon>HomePage.xaml</DependentUpon>

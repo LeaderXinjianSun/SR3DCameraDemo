@@ -36,6 +36,7 @@
                         <ColumnDefinition></ColumnDefinition>
                     </Grid.ColumnDefinitions>
                     <Button Style="{StaticResource MahApps.Styles.Button.Square.Accent}" Content="功能" FontSize="22" Margin="10" Command="{Binding OperateButtonCommand}" CommandParameter="0"></Button>
+                    <Button Grid.Column="1" Style="{StaticResource MahApps.Styles.Button.Square.Accent}" Content="触发" FontSize="22" Margin="10" Command="{Binding OperateButtonCommand}" CommandParameter="1"></Button>
                 </Grid>
             </GroupBox>
         </Grid>
