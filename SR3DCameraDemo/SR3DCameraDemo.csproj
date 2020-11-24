@@ -122,6 +122,7 @@
     <Compile Include="Model\Metro.cs" />
     <Compile Include="Model\PinnedObject.cs" />
     <Compile Include="Model\SR7LinkFunc.cs" />
+    <Compile Include="Model\SSZNEcd.cs" />
     <Compile Include="Model\XinjePLCModbusRTU.cs" />
     <Compile Include="ViewModel\MainWindowViewModel.cs" />
     <Compile Include="View\HomePage.xaml.cs">

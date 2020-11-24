@@ -35,8 +35,11 @@
                         <ColumnDefinition></ColumnDefinition>
                         <ColumnDefinition></ColumnDefinition>
                     </Grid.ColumnDefinitions>
-                    <Button Style="{StaticResource MahApps.Styles.Button.Square.Accent}" Content="功能" FontSize="22" Margin="10" Command="{Binding OperateButtonCommand}" CommandParameter="0"></Button>
+                    <Button Style="{StaticResource MahApps.Styles.Button.Square.Accent}" Content="功能" FontSize="22" Margin="10" Command="{Binding OperateButtonCommand}" CommandParameter="0" IsEnabled="{Binding FuncButtonIsEnabled}"></Button>
                     <Button Grid.Column="1" Style="{StaticResource MahApps.Styles.Button.Square.Accent}" Content="触发" FontSize="22" Margin="10" Command="{Binding OperateButtonCommand}" CommandParameter="1"></Button>
+
+                    <Button Grid.Row="2" Style="{StaticResource MahApps.Styles.Button.Square.Accent}" Content="加载" FontSize="22" Margin="10" Command="{Binding OperateButtonCommand}" CommandParameter="3"></Button>
+                    <Button Grid.Row="2" Grid.Column="1" Style="{StaticResource MahApps.Styles.Button.Square.Accent}" Content="保存" FontSize="22" Margin="10" Command="{Binding OperateButtonCommand}" CommandParameter="2"></Button>
                 </Grid>
             </GroupBox>
         </Grid>

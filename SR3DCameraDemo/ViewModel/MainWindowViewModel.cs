@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -119,6 +120,18 @@ namespace SR3DCameraDemo.ViewModel
                 this.RaisePropertyChanged("CameraGCStyle");
             }
         }
+        private bool funcButtonIsEnabled;
+
+        public bool FuncButtonIsEnabled
+        {
+            get { return funcButtonIsEnabled; }
+            set
+            {
+                funcButtonIsEnabled = value;
+                this.RaisePropertyChanged("FuncButtonIsEnabled");
+            }
+        }
+
         #endregion
         #region 方法绑定
         public DelegateCommand<object> MenuActionCommand { get; set; }
@@ -153,6 +166,7 @@ namespace SR3DCameraDemo.ViewModel
 
         private string iniParameterPath = System.Environment.CurrentDirectory + "\\Parameter.ini";
         XinjePLCModbusRTU xinje;
+        PointCloudHead pointCloudHead = new PointCloudHead();
         #endregion
         #region 构造函数
         public MainWindowViewModel()
@@ -161,6 +175,7 @@ namespace SR3DCameraDemo.ViewModel
             Version = "20201118";
             MessageStr = "";
             CameraROIList = new ObservableCollection<ROI>();
+            FuncButtonIsEnabled = true;
             string com = Inifile.INIGetStringValue(iniParameterPath, "PLC", "COM", "COM1");
             xinje = new XinjePLCModbusRTU(com);
             xinje.PLC.StateChanged += PLC_StateChanged;
@@ -209,6 +224,7 @@ namespace SR3DCameraDemo.ViewModel
                 case "0":
                     Task.Run(() =>
                     {
+                        FuncButtonIsEnabled = false;
                         int _currentDeviceId = 0;
                         IntPtr DataObject = new IntPtr();
                         xinje.SetM("M500", true);
@@ -219,7 +235,7 @@ namespace SR3DCameraDemo.ViewModel
 
                         // 接收数据
                         Rc = SR7LinkFunc.SR7IF_ReceiveData(_currentDeviceId, DataObject);
-
+                        FuncButtonIsEnabled = true;
                         if (Rc == SR7IF_ERROR_MODE)
                         {
                             AddMessage("当前为循环模式!");
@@ -233,14 +249,18 @@ namespace SR3DCameraDemo.ViewModel
                         }
                         else
                         {
+                            
                             // 获取批处理行数
                             int BatchPointTmp = SR7LinkFunc.SR7IF_ProfilePointCount(_currentDeviceId, DataObject);
+                            pointCloudHead._height = BatchPointTmp;
 
                             // 获取宽度
                             int m_DataWidthTmp = SR7LinkFunc.SR7IF_ProfileDataWidth(_currentDeviceId, DataObject);
+                            pointCloudHead._width = m_DataWidthTmp;
 
                             // 数据x方向间距(mm)
                             double m_XPitch = SR7LinkFunc.SR7IF_ProfileData_XPitch(_currentDeviceId, DataObject);
+                            pointCloudHead._yInterval = pointCloudHead._xInterval = m_XPitch;
 
                             int BatchPoint = BatchPointTmp;
                             int m_DataWidth = m_DataWidthTmp;
@@ -265,7 +285,7 @@ namespace SR3DCameraDemo.ViewModel
                                         HeightData[i] = -1000000;
                                     }
                                 }// pin.Pointer 获取高度数据缓存地址
-                                var img = BatchDataShow(HeightData, 8.4, -8.4, 255, m_DataWidth, BatchPoint, Tmpxs, Tmpys);
+                                var img = BatchDataShow(HeightData, pointCloudHead,255, 8.4, -8.4);
 
                                 // 显示
                                 CameraIamge = Bitmap2HImage_24(img);
@@ -277,6 +297,51 @@ namespace SR3DCameraDemo.ViewModel
                     xinje.SetM("M500", true);
                     AddMessage("仅触发");
 
+                    break;
+                case "2":
+                    if (pointCloudHead._width != 0)
+                    {
+                        using (SaveFileDialog saveFileDialog = new SaveFileDialog())
+                        {
+                            saveFileDialog.Filter = "文本文件(*.ecd)|*.ecd";
+                            saveFileDialog.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+                            if (saveFileDialog.ShowDialog() == DialogResult.OK)
+                            {
+                                try
+                                {
+                                    SSZNEcd.WriteEcd(saveFileDialog.FileName, HeightData, pointCloudHead);
+                                    AddMessage("保存高度数据完成");
+                                }
+                                catch (Exception ex)
+                                {
+                                    AddMessage(ex.Message);
+                                }
+                                
+                            }
+                        }
+                    }
+                    else
+                    {
+                        AddMessage("保存失败：无数据");
+                    }
+                    break;
+                case "3":
+                    using (OpenFileDialog dlg = new OpenFileDialog())
+                    {
+                        dlg.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+                        dlg.Filter = "文本文件(*.ecd)|*.ecd";  //设置文件过滤
+                       
+                        dlg.Multiselect = false;              //禁止多选
+                        if (dlg.ShowDialog() == DialogResult.OK)
+                        {
+                            string fileName = dlg.FileName;
+                            SSZNEcd.ReadEcd(fileName, ref HeightData, ref pointCloudHead);
+                            AddMessage("加载高度数据完成");
+                            var img = BatchDataShow(HeightData, pointCloudHead, 255, 8.4, -8.4);
+                            // 显示
+                            CameraIamge = Bitmap2HImage_24(img);
+                        }
+                    }
                     break;
                 default:
                     break;
@@ -326,6 +391,71 @@ namespace SR3DCameraDemo.ViewModel
 
 
             return hImage;
+        }
+        private Bitmap BatchDataShow(int[] data, PointCloudHead pcHead, int _ColorMax, double max_height, double min_height)
+        {            
+            int imgW = 800;
+            int imgH = (int)((double)imgW / pcHead._width * pcHead._height);
+            int TmpX = 0;
+            int Tmppx = 0;
+            if (pcHead._height < imgH)
+                imgH = pcHead._height;
+            if (pcHead._width < imgW)
+                imgW = pcHead._width;
+
+            int _scaleH = Convert.ToInt32(Convert.ToDouble(pcHead._height) / imgH - 0.5);   //Y方向缩放倍数
+            int _scaleW = Convert.ToInt32(Convert.ToDouble(pcHead._width) / imgW);        //X方向缩放倍数
+            if (pcHead._height < imgH)
+                _scaleH = 1;
+            if (pcHead._width < imgW)
+                _scaleW = 1;
+
+            int TT = (imgW * 8 + 31) / 32;   //图像四字节对齐
+            TT = TT * 4;
+
+            int m_HeightDataNum = TT * imgH;
+            double fscale = _ColorMax / (max_height - min_height);
+
+            byte[] BatchImage = new byte[m_HeightDataNum];
+
+            for (int i = 0; i < imgH; i++)
+            {
+                TmpX = i * _scaleH * pcHead._width;
+                Tmppx = i * TT;
+                for (int j = 0; j < imgW; j++)
+                {
+                    double Tmp = data[TmpX + j * _scaleW] * 0.00001;
+                    if (Tmp < min_height)
+                        BatchImage[Tmppx + j] = 0;
+                    else if (Tmp > max_height)
+                        BatchImage[Tmppx + j] = 255;
+                    else
+                    {
+                        byte tmpt = Convert.ToByte((Tmp - min_height) * fscale);
+                        BatchImage[Tmppx + j] = tmpt;
+                    }
+                }
+            }
+
+            Bitmap TmpBitmap = new Bitmap(imgW, imgH, PixelFormat.Format8bppIndexed);
+
+            // 256 调色板
+            ColorPalette monoPalette = TmpBitmap.Palette;
+            Color[] entries = monoPalette.Entries;
+            for (int i = 0; i < 256; i++)
+                entries[i] = Color.FromArgb(i, i, i);
+
+            TmpBitmap.Palette = monoPalette;
+
+            Rectangle rect = new Rectangle(0, 0, TmpBitmap.Width, TmpBitmap.Height);
+            System.Drawing.Imaging.BitmapData bmpData = TmpBitmap.LockBits(rect, System.Drawing.Imaging.ImageLockMode.WriteOnly,
+                System.Drawing.Imaging.PixelFormat.Format8bppIndexed);
+            int bytes = TT * TmpBitmap.Height;  //每行实际字节数
+            IntPtr ptr = bmpData.Scan0;
+            System.Runtime.InteropServices.Marshal.Copy(BatchImage, 0, ptr, bytes);
+            TmpBitmap.UnlockBits(bmpData);
+
+            return TmpBitmap;
         }
         /// <summary>
         /// 高度图像显示--非无限循环方式
