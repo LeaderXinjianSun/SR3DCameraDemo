@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
              xmlns:local="clr-namespace:SR3DCameraDemo.View"
+             xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks"
              xmlns:halconviewer="clr-namespace:HalconViewer;assembly=HalconViewer"
              mc:Ignorable="d" 
              d:DesignHeight="540" d:DesignWidth="800">
@@ -16,7 +17,7 @@
             <ColumnDefinition  Width="2*"></ColumnDefinition>
             <ColumnDefinition></ColumnDefinition>
         </Grid.ColumnDefinitions>
-        <halconviewer:ImageViewer Name="CameraImageViewer" Image="{Binding CameraIamge}" Repaint="{Binding CameraRepaint}" AutoRepaint="True" ROIList="{Binding CameraROIList}" AppendHObject="{Binding CameraAppendHObject}" GCStyle="{Binding CameraGCStyle}" Margin="1"></halconviewer:ImageViewer>
+        <halconviewer:ImageViewer Name="CameraImageViewer" Visibility="{Binding HalconWindowVisibility}" Image="{Binding CameraIamge}" Repaint="{Binding CameraRepaint}" AutoRepaint="True" ROIList="{Binding CameraROIList}" AppendHObject="{Binding CameraAppendHObject}" GCStyle="{Binding CameraGCStyle}" Margin="1"></halconviewer:ImageViewer>
         <TextBox Grid.Row="1" VerticalAlignment="Stretch" VerticalContentAlignment="Top" HorizontalContentAlignment="Left" Margin="1" x:Name="MsgTextBox" IsReadOnly="True" TextChanged="MsgTextBox_TextChanged"  FontSize="14" Background="Black" FontFamily="宋体" Foreground="White" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Text="{Binding MessageStr}"></TextBox>
         <Grid Grid.Column="1" Grid.RowSpan="2">
             <Grid.RowDefinitions>
@@ -35,13 +36,38 @@
                         <ColumnDefinition></ColumnDefinition>
                         <ColumnDefinition></ColumnDefinition>
                     </Grid.ColumnDefinitions>
-                    <Button Style="{StaticResource MahApps.Styles.Button.Square.Accent}" Content="功能" FontSize="22" Margin="10" Command="{Binding OperateButtonCommand}" CommandParameter="0" IsEnabled="{Binding FuncButtonIsEnabled}"></Button>
-                    <Button Grid.Column="1" Style="{StaticResource MahApps.Styles.Button.Square.Accent}" Content="触发" FontSize="22" Margin="10" Command="{Binding OperateButtonCommand}" CommandParameter="1"></Button>
+                    <Button Grid.Column="2" Style="{StaticResource MahApps.Styles.Button.Square.Accent}" Content="计算" FontSize="22" Margin="10" Command="{Binding OperateButtonCommand}" CommandParameter="7"></Button>
+                    
+                    <Button Style="{StaticResource MahApps.Styles.Button.Square.Accent}" Content="扫描" FontSize="22" Margin="10" Command="{Binding OperateButtonCommand}" CommandParameter="0" IsEnabled="{Binding FuncButtonIsEnabled}"></Button>
+                    <Button Grid.Column="1" Style="{StaticResource MahApps.Styles.Button.Square.Accent}" Content="仅&#13;触发" FontSize="16" Margin="10" Command="{Binding OperateButtonCommand}" CommandParameter="1"></Button>
 
-                    <Button Grid.Row="2" Style="{StaticResource MahApps.Styles.Button.Square.Accent}" Content="加载" FontSize="22" Margin="10" Command="{Binding OperateButtonCommand}" CommandParameter="3"></Button>
-                    <Button Grid.Row="2" Grid.Column="1" Style="{StaticResource MahApps.Styles.Button.Square.Accent}" Content="保存" FontSize="22" Margin="10" Command="{Binding OperateButtonCommand}" CommandParameter="2"></Button>
-                    <Button Grid.Row="2" Grid.Column="2" Style="{StaticResource MahApps.Styles.Button.Square.Accent}" Content="3D" FontSize="22" Margin="10" Command="{Binding OperateButtonCommand}" CommandParameter="4"></Button>
+                    <Button Grid.Row="1" Style="{StaticResource MahApps.Styles.Button.Square.Accent}" Content="测量&#13;点" FontSize="16" Margin="10" Command="{Binding OperateButtonCommand}" CommandParameter="5"></Button>
+                    <Button Grid.Row="1" Grid.Column="1" Style="{StaticResource MahApps.Styles.Button.Square.Accent}" Content="基准&#13;点" FontSize="16" Margin="10" Command="{Binding OperateButtonCommand}" CommandParameter="6"></Button>
+
+                    <Button Grid.Row="2" Style="{StaticResource MahApps.Styles.Button.Square.Accent}" Content="加载&#13;点云" FontSize="16" Margin="10" Command="{Binding OperateButtonCommand}" CommandParameter="3"></Button>
+                    <Button Grid.Row="2" Grid.Column="1" Style="{StaticResource MahApps.Styles.Button.Square.Accent}" Content="保存&#13;点云" FontSize="16" Margin="10" Command="{Binding OperateButtonCommand}" CommandParameter="2"></Button>
+                    <Button Grid.Row="2" Grid.Column="2" Style="{StaticResource MahApps.Styles.Button.Square.Accent}" Margin="10" Command="{Binding OperateButtonCommand}" CommandParameter="4">
+                        <iconPacks:Material Width="40"
+                                              Height="40"
+                                              Kind="DominoMask" />
+                    </Button>
                 </Grid>
+            </GroupBox>
+            <GroupBox Grid.Row="1" Header="数据面板">
+                <StackPanel Orientation="Vertical">
+                    <StackPanel Orientation="Horizontal">
+                        <Label Width="80">测量点高度：</Label>
+                        <TextBlock Text="{Binding TestPValue,StringFormat={}{0:F3}mm}"></TextBlock>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <Label Width="80">基准点高度：</Label>
+                        <TextBlock Text="{Binding FundPValue,StringFormat={}{0:F3}mm}"></TextBlock>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <Label Width="80">高度差：</Label>
+                        <TextBlock Text="{Binding DistPValue,StringFormat={}{0:F3}mm}"></TextBlock>
+                    </StackPanel>
+                </StackPanel>
             </GroupBox>
         </Grid>
     </Grid>

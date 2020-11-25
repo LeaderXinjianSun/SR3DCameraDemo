@@ -10,6 +10,7 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Runtime.Serialization.Formatters.Binary;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -131,6 +132,50 @@ namespace SR3DCameraDemo.ViewModel
                 this.RaisePropertyChanged("FuncButtonIsEnabled");
             }
         }
+        private string halconWindowVisibility;
+
+        public string HalconWindowVisibility
+        {
+            get { return halconWindowVisibility; }
+            set
+            {
+                halconWindowVisibility = value;
+                this.RaisePropertyChanged("HalconWindowVisibility");
+            }
+        }
+        private double testPValue;
+
+        public double TestPValue
+        {
+            get { return testPValue; }
+            set
+            {
+                testPValue = value;
+                this.RaisePropertyChanged("TestPValue");
+            }
+        }
+        private double fundPValue;
+
+        public double FundPValue
+        {
+            get { return fundPValue; }
+            set
+            {
+                fundPValue = value;
+                this.RaisePropertyChanged("FundPValue");
+            }
+        }
+        private double distPValue;
+
+        public double DistPValue
+        {
+            get { return distPValue; }
+            set
+            {
+                distPValue = value;
+                this.RaisePropertyChanged("DistPValue");
+            }
+        }
 
         #endregion
         #region 方法绑定
@@ -167,24 +212,59 @@ namespace SR3DCameraDemo.ViewModel
         private string iniParameterPath = System.Environment.CurrentDirectory + "\\Parameter.ini";
         XinjePLCModbusRTU xinje;
         PointCloudHead pointCloudHead = new PointCloudHead();
+        private Metro metro = new Metro();
         #endregion
         #region 构造函数
         public MainWindowViewModel()
         {
             #region 参数初始化
-            Version = "20201118";
+            Version = "20201125";
             MessageStr = "";
-            CameraROIList = new ObservableCollection<ROI>();
+            try
+            {
+                
+                using (FileStream fileStream = new FileStream(Path.Combine(System.Environment.CurrentDirectory, "ROI.bin"), FileMode.Open, FileAccess.Read, FileShare.Read))
+                {
+                    BinaryFormatter mBinFmat = new BinaryFormatter();                    
+                    CameraROIList = (ObservableCollection<ROI>)mBinFmat.Deserialize(fileStream);
+                    foreach (var item in CameraROIList)
+                    {
+                        if (item.ROIId == 0)
+                        {
+                            item.ROIColor = "green";
+                        }
+                        if (item.ROIId == 1)
+                        {
+                            item.ROIColor = "magenta";
+                        }
+                    }
+                    CameraRepaint = !CameraRepaint;
+                }
+            }
+            catch (Exception ex)
+            {
+                CameraROIList = new ObservableCollection<ROI>();
+                AddMessage(ex.Message);
+            }
+
             FuncButtonIsEnabled = true;
             string com = Inifile.INIGetStringValue(iniParameterPath, "PLC", "COM", "COM1");
             xinje = new XinjePLCModbusRTU(com);
             xinje.PLC.StateChanged += PLC_StateChanged;
             xinje.PLC.Connect();
             StatusPLC = true;
+            HalconWindowVisibility = "Visible";
             #endregion
             MenuActionCommand = new DelegateCommand<object>(new Action<object>(this.OperateButtonCommandExecute));
             AppLoadedEventCommand = new DelegateCommand(new Action(this.AppLoadedEventCommandExecute));
             OperateButtonCommand = new DelegateCommand<object>(new Action<object>(this.OperateButtonCommandExecute));
+
+            System.Diagnostics.Process[] myProcesses = System.Diagnostics.Process.GetProcessesByName("SR3DCameraDemo");//获取指定的进程名   
+            if (myProcesses.Length > 1) //如果可以获取到知道的进程名则说明已经启动
+            {
+                System.Windows.MessageBox.Show("不允许重复打开软件", "Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                System.Windows.Application.Current.Shutdown();
+            }
         }
 
         private void PLC_StateChanged(object sender, bool e)
@@ -217,12 +297,13 @@ namespace SR3DCameraDemo.ViewModel
             AddMessage("软件加载完成");
         }
 
-        private void OperateButtonCommandExecute(object obj)
+        private async void OperateButtonCommandExecute(object obj)
         {
+            bool r;
             switch (obj.ToString())
             {
                 case "0":
-                    Task.Run(() =>
+                    await Task.Run(() =>
                     {
                         FuncButtonIsEnabled = false;
                         int _currentDeviceId = 0;
@@ -309,7 +390,8 @@ namespace SR3DCameraDemo.ViewModel
                             {
                                 try
                                 {
-                                    SSZNEcd.WriteEcd(saveFileDialog.FileName, HeightData, pointCloudHead);
+                                    AddMessage("开始保存高度数据……");
+                                    await Task.Run(()=> { SSZNEcd.WriteEcd(saveFileDialog.FileName, HeightData, pointCloudHead); }); 
                                     AddMessage("保存高度数据完成");
                                 }
                                 catch (Exception ex)
@@ -334,8 +416,9 @@ namespace SR3DCameraDemo.ViewModel
                         dlg.Multiselect = false;              //禁止多选
                         if (dlg.ShowDialog() == DialogResult.OK)
                         {
+                            AddMessage("开始加载高度数据……");
                             string fileName = dlg.FileName;
-                            SSZNEcd.ReadEcd(fileName, ref HeightData, ref pointCloudHead);
+                            await Task.Run(()=> { SSZNEcd.ReadEcd(fileName, ref HeightData, ref pointCloudHead); });                                                       
                             AddMessage("加载高度数据完成");
                             var img = BatchDataShow(HeightData, pointCloudHead, 255, 8.4, -8.4);
                             // 显示
@@ -362,6 +445,84 @@ namespace SR3DCameraDemo.ViewModel
                     else
                     {
                         AddMessage("3D显示失败：无数据");
+                    }
+                    break;
+                case "5":
+                    metro.ChangeAccent("Dark.Red");
+                    HalconWindowVisibility = "Collapsed";
+                    r = await metro.ShowConfirm("确认", "请确认需要重画测量点吗？");
+                    if (r)
+                    {
+                        metro.ChangeAccent("Light.Teal");
+                        HalconWindowVisibility = "Visible";
+                        ROI roi = Global.CameraImageViewer.DrawROI(ROI.ROI_TYPE_RECTANGLE1);
+                        roi.ROIColor = "green";
+                        roi.ROIId = 0;
+                        roi.ROIInfo = "测量点";
+                        var roifind = CameraROIList.FirstOrDefault(roi1 => roi1.ROIId == 0);
+                        if (roifind == null)
+                        {
+                            CameraROIList.Add(roi);
+                            CameraRepaint = !CameraRepaint;
+                        }
+                        else
+                        {
+                            CameraROIList.Remove(roifind);
+                            CameraROIList.Add(roi);
+                            CameraRepaint = !CameraRepaint;
+                        }
+                        WriteToBin(CameraROIList, Path.Combine(System.Environment.CurrentDirectory, "ROI.bin"));
+                    }
+                    else
+                    {
+                        metro.ChangeAccent("Light.Teal");
+                        HalconWindowVisibility = "Visible";
+                    }
+                    break;
+                case "6":
+                    metro.ChangeAccent("Dark.Red");
+                    HalconWindowVisibility = "Collapsed";
+                    r = await metro.ShowConfirm("确认", "请确认需要重画基准点吗？");
+                    if (r)
+                    {
+                        metro.ChangeAccent("Light.Teal");
+                        HalconWindowVisibility = "Visible";
+                        ROI roi = Global.CameraImageViewer.DrawROI(ROI.ROI_TYPE_RECTANGLE1);
+                        roi.ROIColor = "magenta";
+                        roi.ROIId = 1;
+                        roi.ROIInfo = "基准点";
+                        var roifind = CameraROIList.FirstOrDefault(roi1 => roi1.ROIId == 1);
+                        if (roifind == null)
+                        {
+                            CameraROIList.Add(roi);
+                            CameraRepaint = !CameraRepaint;
+                        }
+                        else
+                        {
+                            CameraROIList.Remove(roifind);
+                            CameraROIList.Add(roi);
+                            CameraRepaint = !CameraRepaint;
+                        }
+                        WriteToBin(CameraROIList, Path.Combine(System.Environment.CurrentDirectory, "ROI.bin"));
+                    }
+                    else
+                    {
+                        metro.ChangeAccent("Light.Teal");
+                        HalconWindowVisibility = "Visible";
+
+                    }
+                    break;
+                case "7":
+                    if (pointCloudHead._width != 0 && CameraROIList.Count >= 2)
+                    {
+                        TestPValue = CalcHeight((ROIRectangle1)CameraROIList.FirstOrDefault(_roi => _roi.ROIId == 0), HeightData, pointCloudHead, CameraIamge);
+                        FundPValue = CalcHeight((ROIRectangle1)CameraROIList.FirstOrDefault(_roi => _roi.ROIId == 1), HeightData, pointCloudHead, CameraIamge);
+                        DistPValue = TestPValue - FundPValue;
+                        AddMessage($"计算完成：{DistPValue:F3}");
+                    }
+                    else
+                    {
+                        AddMessage("计算失败：无数据");
                     }
                     break;
                 default:
@@ -608,6 +769,48 @@ namespace SR3DCameraDemo.ViewModel
                     }
                 }
             }
+        }
+        private void WriteToBin(object p, string path)
+        {
+            try
+            {
+                using (FileStream fs = File.Open(path, FileMode.Create))
+                {
+                    BinaryFormatter b = new BinaryFormatter();
+                    b.Serialize(fs, p);
+                }
+            }
+            catch (Exception ex)
+            {
+                AddMessage(ex.Message);
+            }
+        }
+        private double CalcHeight(ROIRectangle1 roi, int[] data, PointCloudHead pcHead, HImage img)
+        {
+            HTuple width, height;
+            HOperatorSet.GetImageSize(img, out width, out height);
+            double wscale = (double)pcHead._width / width;
+            double hscale = (double)pcHead._height / height;
+            int width1 = (int)(wscale * Math.Abs(roi.col2 - roi.col1));
+            int height1 = (int)(hscale * Math.Abs(roi.row2 - roi.row1));
+            double[] data1 = new double[width1 * height1];
+            for (int i = 0; i < height1; i++)
+            {
+                for (int j = 0; j < width1; j++)
+                {
+                    double Tmp = data[(int)((roi.row1 * hscale + i) * pcHead._width + j + roi.col1 * wscale)] * 0.00001;
+                    if (Tmp < -8.4)
+                        data1[i * width1 + j] = -8.4;
+                    else if (Tmp > 8.4)
+                        data1[i * width1 + j] = 8.4;
+                    else
+                    {
+                        data1[i * width1 + j] = Tmp;
+                    }
+                }
+            }
+
+            return data1.Average();
         }
         #endregion
     }
