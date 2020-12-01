@@ -255,7 +255,7 @@ namespace SR3DCameraDemo.ViewModel
             StatusPLC = true;
             HalconWindowVisibility = "Visible";
             #endregion
-            MenuActionCommand = new DelegateCommand<object>(new Action<object>(this.OperateButtonCommandExecute));
+            MenuActionCommand = new DelegateCommand<object>(new Action<object>(this.MenuActionCommandExecute));
             AppLoadedEventCommand = new DelegateCommand(new Action(this.AppLoadedEventCommandExecute));
             OperateButtonCommand = new DelegateCommand<object>(new Action<object>(this.OperateButtonCommandExecute));
 
@@ -265,6 +265,11 @@ namespace SR3DCameraDemo.ViewModel
                 System.Windows.MessageBox.Show("不允许重复打开软件", "Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
                 System.Windows.Application.Current.Shutdown();
             }
+        }
+
+        private void MenuActionCommandExecute(object obj)
+        {
+            
         }
 
         private void PLC_StateChanged(object sender, bool e)
@@ -587,9 +592,9 @@ namespace SR3DCameraDemo.ViewModel
 
             int _scaleH = Convert.ToInt32(Convert.ToDouble(pcHead._height) / imgH - 0.5);   //Y方向缩放倍数
             int _scaleW = Convert.ToInt32(Convert.ToDouble(pcHead._width) / imgW);        //X方向缩放倍数
-            if (pcHead._height < imgH)
+            if (pcHead._height <= imgH)
                 _scaleH = 1;
-            if (pcHead._width < imgW)
+            if (pcHead._width <= imgW)
                 _scaleW = 1;
 
             int TT = (imgW * 8 + 31) / 32;   //图像四字节对齐
@@ -798,7 +803,8 @@ namespace SR3DCameraDemo.ViewModel
             {
                 for (int j = 0; j < width1; j++)
                 {
-                    double Tmp = data[(int)((roi.row1 * hscale + i) * pcHead._width + j + roi.col1 * wscale)] * 0.00001;
+                    //一定要保证是整数行 × 行点数，否则小数部分会影响定位
+                    double Tmp = data[((int)(roi.row1 * hscale) + i) * pcHead._width + j + (int)(roi.col1 * wscale)] * 0.00001;
                     if (Tmp < -8.4)
                         data1[i * width1 + j] = -8.4;
                     else if (Tmp > 8.4)
@@ -807,10 +813,10 @@ namespace SR3DCameraDemo.ViewModel
                     {
                         data1[i * width1 + j] = Tmp;
                     }
+                    
                 }
             }
-
-            return data1.Average();
+            return MathNet.Numerics.Statistics.ArrayStatistics.Mean(data1);
         }
         #endregion
     }
