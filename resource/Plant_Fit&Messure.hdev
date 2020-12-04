@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<hdevelop file_version="1.1" halcon_version="13.0">
+<procedure name="main">
+<interface/>
+<body>
+<c>  *3D坐标</c>
+<l>X:=[6.238,12.196,12.316,6.419,7.421,9.5,11.531]</l>
+<l>Y:=[8.538,8.023,17.377,19.706,-5.698,7.081,5.658]</l>
+<l>Z:=[2.741,2.705,2.703,2.731,2.744,2.724,2.714]</l>
+<c>*3D坐标转化为3D模型</c>
+<l>gen_object_model_3d_from_points(X,Y, Z, ObjectModel3D)</l>
+<c>*3D模型拟合成平面</c>
+<l>ParFitting := ['primitive_type','fitting_algorithm','output_xyz_mapping']</l>
+<l>ValFitting := ['plane','least_squares_tukey','true']</l>
+<c>* Apply the fitting</c>
+<l>fit_primitives_object_model_3d (ObjectModel3D, ParFitting, ValFitting, ObjectModel3DOutID)</l>
+<c>*获取拟合参数（法向量，平面中心一点）</c>
+<l>get_object_model_3d_params(ObjectModel3DOutID, 'primitive_parameter', primitive_parameter)</l>
+<l>get_object_model_3d_params(ObjectModel3DOutID, 'center', center)</l>
+<c>*计算平面方程(a,b,c,d)</c>
+<l>a:=primitive_parameter[0]</l>
+<l>b:=primitive_parameter[1]</l>
+<l>c:=primitive_parameter[2]</l>
+<l>d:=-1*center[0]*a-center[1]*b-center[2]*c</l>
+<c>*平面度计算</c>
+<l>minD:=9999</l>
+<l>maxD:=-9999</l>
+<l>for i := 0 to |X|-1 by 1</l>
+<l>    D:=a*X[i]+b*Y[i]+c*Z[i]+d</l>
+<l>    if(minD&gt;D)</l>
+<l>        minD:=D</l>
+<l>    endif</l>
+<l>    if(maxD&lt;D)</l>
+<l>        maxD:=D</l>
+<l>    endif</l>
+<l>endfor</l>
+<l>planness:=maxD-minD</l>
+<c>*点到平面距离</c>
+<l>X1:=7.9315</l>
+<l>Y1:=25</l>
+<l>Z1:=0.700655</l>
+<l>d1:=a*a+b*b+c*c</l>
+<l>tuple_sqrt(d1, Sqrt)</l>
+<l>tuple_abs(a*X1+b*Y1+c*Z1+d,d2)</l>
+<c>*</c>
+<l>distance:=d2/Sqrt</l>
+<c></c>
+</body>
+<docu id="main">
+<parameters/>
+</docu>
+</procedure>
+</hdevelop>

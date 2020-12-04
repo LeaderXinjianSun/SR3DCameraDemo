@@ -8,7 +8,7 @@
         xmlns:i="clr-namespace:System.Windows.Interactivity;assembly=System.Windows.Interactivity"
         xmlns:View="clr-namespace:SR3DCameraDemo.View"
         mc:Ignorable="d"
-        Title="{Binding Version,StringFormat=SR3DCameraDemo {0}}" Icon="3d_printer_64px_1202440_easyicon.net.ico"
+        Title="{Binding Version,StringFormat=Millimeter6xUI {0}}" Icon="3d_printer_64px_1202440_easyicon.net.ico"
 Height="600" Width="800" WindowStartupLocation ="CenterScreen" ResizeMode="CanResize" Closing="MetroWindow_Closing">
     <Controls:MetroWindow.Resources>
         <ResourceDictionary>

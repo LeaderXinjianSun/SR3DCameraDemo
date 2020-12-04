@@ -1,6 +1,7 @@
 ﻿using HalconDotNet;
 using Microsoft.Practices.Prism.Commands;
 using Microsoft.Practices.Prism.ViewModel;
+using OfficeOpenXml;
 using SR3DCameraDemo.Model;
 using System;
 using System.Collections.Generic;
@@ -176,6 +177,17 @@ namespace SR3DCameraDemo.ViewModel
                 this.RaisePropertyChanged("DistPValue");
             }
         }
+        private ObservableCollection<Point3DViewModel> point3Ds;
+
+        public ObservableCollection<Point3DViewModel> Point3Ds
+        {
+            get { return point3Ds; }
+            set
+            {
+                point3Ds = value;
+                this.RaisePropertyChanged("Point3Ds");
+            }
+        }
 
         #endregion
         #region 方法绑定
@@ -213,39 +225,16 @@ namespace SR3DCameraDemo.ViewModel
         XinjePLCModbusRTU xinje;
         PointCloudHead pointCloudHead = new PointCloudHead();
         private Metro metro = new Metro();
+        List<PosArray> hmList = new List<PosArray>();
         #endregion
         #region 构造函数
         public MainWindowViewModel()
         {
             #region 参数初始化
-            Version = "20201125";
+            Version = "20201202";
             MessageStr = "";
-            try
-            {
-                
-                using (FileStream fileStream = new FileStream(Path.Combine(System.Environment.CurrentDirectory, "ROI.bin"), FileMode.Open, FileAccess.Read, FileShare.Read))
-                {
-                    BinaryFormatter mBinFmat = new BinaryFormatter();                    
-                    CameraROIList = (ObservableCollection<ROI>)mBinFmat.Deserialize(fileStream);
-                    foreach (var item in CameraROIList)
-                    {
-                        if (item.ROIId == 0)
-                        {
-                            item.ROIColor = "green";
-                        }
-                        if (item.ROIId == 1)
-                        {
-                            item.ROIColor = "magenta";
-                        }
-                    }
-                    CameraRepaint = !CameraRepaint;
-                }
-            }
-            catch (Exception ex)
-            {
-                CameraROIList = new ObservableCollection<ROI>();
-                AddMessage(ex.Message);
-            }
+            CameraROIList = new ObservableCollection<ROI>();
+            Point3Ds = new ObservableCollection<Point3DViewModel>();
 
             FuncButtonIsEnabled = true;
             string com = Inifile.INIGetStringValue(iniParameterPath, "PLC", "COM", "COM1");
@@ -254,12 +243,33 @@ namespace SR3DCameraDemo.ViewModel
             xinje.PLC.Connect();
             StatusPLC = true;
             HalconWindowVisibility = "Visible";
+
+            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
+            try
+            {
+                using (var package = new ExcelPackage(new FileInfo("pointcor.xlsx")))
+                {
+                    ExcelWorksheet worksheet = package.Workbook.Worksheets["HS"];
+                    for (int i = 2; i <= worksheet.Dimension.End.Row; i++)
+                    {
+                        hmList.Add(new PosArray() { 
+                            x = double.Parse(worksheet.Cells["B" + i.ToString()].Value.ToString()), 
+                            y = double.Parse(worksheet.Cells["C" + i.ToString()].Value.ToString()) });
+                    }
+
+                }
+            }
+            catch (Exception ex)
+            {
+                AddMessage(ex.Message);
+            }
+
             #endregion
             MenuActionCommand = new DelegateCommand<object>(new Action<object>(this.MenuActionCommandExecute));
             AppLoadedEventCommand = new DelegateCommand(new Action(this.AppLoadedEventCommandExecute));
             OperateButtonCommand = new DelegateCommand<object>(new Action<object>(this.OperateButtonCommandExecute));
 
-            System.Diagnostics.Process[] myProcesses = System.Diagnostics.Process.GetProcessesByName("SR3DCameraDemo");//获取指定的进程名   
+            System.Diagnostics.Process[] myProcesses = System.Diagnostics.Process.GetProcessesByName("Millimeter6xUI");//获取指定的进程名   
             if (myProcesses.Length > 1) //如果可以获取到知道的进程名则说明已经启动
             {
                 System.Windows.MessageBox.Show("不允许重复打开软件", "Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
@@ -460,23 +470,12 @@ namespace SR3DCameraDemo.ViewModel
                     {
                         metro.ChangeAccent("Light.Teal");
                         HalconWindowVisibility = "Visible";
-                        ROI roi = Global.CameraImageViewer.DrawROI(ROI.ROI_TYPE_RECTANGLE1);
+                        ROI roi = Global.CameraImageViewer.DrawROI(ROI.ROI_TYPE_CIRCLE);
                         roi.ROIColor = "green";
                         roi.ROIId = 0;
-                        roi.ROIInfo = "测量点";
-                        var roifind = CameraROIList.FirstOrDefault(roi1 => roi1.ROIId == 0);
-                        if (roifind == null)
-                        {
-                            CameraROIList.Add(roi);
-                            CameraRepaint = !CameraRepaint;
-                        }
-                        else
-                        {
-                            CameraROIList.Remove(roifind);
-                            CameraROIList.Add(roi);
-                            CameraRepaint = !CameraRepaint;
-                        }
-                        WriteToBin(CameraROIList, Path.Combine(System.Environment.CurrentDirectory, "ROI.bin"));
+                        CameraROIList.Clear();
+                        CameraROIList.Add(roi);
+                        CameraRepaint = !CameraRepaint;
                     }
                     else
                     {
@@ -484,50 +483,87 @@ namespace SR3DCameraDemo.ViewModel
                         HalconWindowVisibility = "Visible";
                     }
                     break;
-                case "6":
-                    metro.ChangeAccent("Dark.Red");
-                    HalconWindowVisibility = "Collapsed";
-                    r = await metro.ShowConfirm("确认", "请确认需要重画基准点吗？");
-                    if (r)
-                    {
-                        metro.ChangeAccent("Light.Teal");
-                        HalconWindowVisibility = "Visible";
-                        ROI roi = Global.CameraImageViewer.DrawROI(ROI.ROI_TYPE_RECTANGLE1);
-                        roi.ROIColor = "magenta";
-                        roi.ROIId = 1;
-                        roi.ROIInfo = "基准点";
-                        var roifind = CameraROIList.FirstOrDefault(roi1 => roi1.ROIId == 1);
-                        if (roifind == null)
-                        {
-                            CameraROIList.Add(roi);
-                            CameraRepaint = !CameraRepaint;
-                        }
-                        else
-                        {
-                            CameraROIList.Remove(roifind);
-                            CameraROIList.Add(roi);
-                            CameraRepaint = !CameraRepaint;
-                        }
-                        WriteToBin(CameraROIList, Path.Combine(System.Environment.CurrentDirectory, "ROI.bin"));
-                    }
-                    else
-                    {
-                        metro.ChangeAccent("Light.Teal");
-                        HalconWindowVisibility = "Visible";
-
-                    }
-                    break;
+                
                 case "7":
-                    if (pointCloudHead._width != 0 && CameraROIList.Count >= 2)
+                    //if (pointCloudHead._width != 0 && CameraROIList.Count >= 2)
+                    //{
+                    //    TestPValue = CalcHeight((ROIRectangle1)CameraROIList.FirstOrDefault(_roi => _roi.ROIId == 0), HeightData, pointCloudHead, CameraIamge);
+                    //    FundPValue = CalcHeight((ROIRectangle1)CameraROIList.FirstOrDefault(_roi => _roi.ROIId == 1), HeightData, pointCloudHead, CameraIamge);
+                    //    DistPValue = TestPValue - FundPValue;
+                    //    AddMessage($"计算完成：{DistPValue:F3}");
+                    //}
+                    //else
+                    //{
+                    //    AddMessage("计算失败：无数据");
+                    //}
+                    var region = (ROICircle)CameraROIList.FirstOrDefault(_roi => _roi.ROIId == 0);
+                    if (region != null && pointCloudHead._width != 0 && CameraIamge != null)
                     {
-                        TestPValue = CalcHeight((ROIRectangle1)CameraROIList.FirstOrDefault(_roi => _roi.ROIId == 0), HeightData, pointCloudHead, CameraIamge);
-                        FundPValue = CalcHeight((ROIRectangle1)CameraROIList.FirstOrDefault(_roi => _roi.ROIId == 1), HeightData, pointCloudHead, CameraIamge);
-                        DistPValue = TestPValue - FundPValue;
-                        AddMessage($"计算完成：{DistPValue:F3}");
-                    }
-                    else
-                    {
-                        AddMessage("计算失败：无数据");
+                        HTuple width, height;
+                        HOperatorSet.GetImageSize(CameraIamge, out width, out height);
+                        double wscale = (double)pointCloudHead._width / width;
+                        double hscale = (double)pointCloudHead._height / height;
+                        double[,] dists = new double[hmList.Count, 2];
+                        for (int i = 0; i < hmList.Count; i++)
+                        {
+                            dists[i, 0] = hmList[i].x / pointCloudHead._xInterval;
+                            dists[i, 1] = hmList[i].y / pointCloudHead._yInterval;
+                        }
+                        HTuple x = new HTuple(), y = new HTuple(), z = new HTuple();
+                        HOperatorSet.SetColor(Global.CameraImageViewer.viewController.viewPort.HalconWindow, "green");
+                        for (int i = 0; i < hmList.Count; i++)
+                        {
+                            HOperatorSet.DispCross(Global.CameraImageViewer.viewController.viewPort.HalconWindow, region.midR + dists[i, 0] / hscale, region.midC - dists[i, 1] / wscale, 30, 0);
+                            double[] rst = Get3DPoint(HeightData, pointCloudHead, CameraIamge, region.midR + dists[i, 0] / hscale, region.midC - dists[i, 1] / wscale);
+                            AddMessage($"{rst[0]},{rst[1]},{rst[2]}");
+                            x = x.TupleConcat(rst[0]);
+                            y = y.TupleConcat(rst[1]);
+                            z = z.TupleConcat(rst[2]);
+                        }
+                        HTuple objectModel3D;
+                        HOperatorSet.GenObjectModel3dFromPoints(x, y, z, out objectModel3D);
+                        HTuple ParFitting = new HTuple("primitive_type", "fitting_algorithm", "output_xyz_mapping");
+                        HTuple ValFitting = new HTuple("plane", "least_squares_tukey", "true");
+                        HTuple objectModel3DOut;
+                        HOperatorSet.FitPrimitivesObjectModel3d(objectModel3D, ParFitting, ValFitting,out objectModel3DOut);
+                        HTuple primitive_parameter;
+                        HOperatorSet.GetObjectModel3dParams(objectModel3DOut, "primitive_parameter",out primitive_parameter);
+                        HTuple center;
+                        HOperatorSet.GetObjectModel3dParams(objectModel3DOut, "center", out center);
+                        HTuple a = primitive_parameter[0];
+                        HTuple b = primitive_parameter[1];
+                        HTuple c = primitive_parameter[2];
+                        HTuple d = -1 * center[0] * a - center[1] * b - center[2] * c;
+                        HTuple minD = 9999;HTuple maxD = -9999;
+                        for (int i = 0; i < hmList.Count; i++)
+                        {
+                            HTuple D = a * x[i] + b * y[i] + c * z[i] + d;
+                            if (minD > D)
+                            {
+                                minD = D;
+                            }
+                            if (maxD < D)
+                            {
+                                maxD = D;
+                            }
+                        }
+                        DistPValue = maxD - minD;
+                        double Sqrt = Math.Sqrt(Math.Pow(a,2) + Math.Pow(b, 2) + Math.Pow(c, 2));
+                        Point3Ds.Clear();
+                        for (int i = 0; i < hmList.Count; i++)
+                        {
+                            double d2 = Math.Abs((a * x[i] + b * y[i] + c * z[i] + d).D);
+                            AddMessage((d2 / Sqrt).ToString());
+                            Point3Ds.Add(new Point3DViewModel()
+                            {
+                                ID = i + 1,
+                                X = x[i],
+                                Y = y[i],
+                                Z = z[i],
+                                Dist = d2 / Sqrt
+                            });
+                        }
+                            
                     }
                     break;
                 default:
@@ -813,11 +849,28 @@ namespace SR3DCameraDemo.ViewModel
                     {
                         data1[i * width1 + j] = Tmp;
                     }
-                    
+
                 }
             }
             return MathNet.Numerics.Statistics.ArrayStatistics.Mean(data1);
         }
+        private double[] Get3DPoint(int[] data, PointCloudHead pcHead, HImage img, HTuple row, HTuple column)
+        {
+            double[] result = new double[3] { 0, 0, 0 };
+            HTuple width, height;
+            HOperatorSet.GetImageSize(img, out width, out height);
+            double wscale = (double)pcHead._width / width;
+            double hscale = (double)pcHead._height / height;
+            result[0] = column * wscale * pcHead._xInterval;
+            result[1] = row * hscale * pcHead._yInterval;
+            result[2] = data[(int)(row.D * hscale) * pcHead._width + (int)(column.D * wscale)] * 0.00001;
+            return result;
+        }
         #endregion
+    }
+    struct PosArray
+    {
+        public double x;
+        public double y;
     }
 }
