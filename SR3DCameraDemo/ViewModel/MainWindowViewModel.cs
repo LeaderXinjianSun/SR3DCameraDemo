@@ -188,6 +188,17 @@ namespace SR3DCameraDemo.ViewModel
                 this.RaisePropertyChanged("Point3Ds");
             }
         }
+        private int pNum;
+
+        public int PNum
+        {
+            get { return pNum; }
+            set
+            {
+                pNum = value;
+                this.RaisePropertyChanged("PNum");
+            }
+        }
 
         #endregion
         #region 方法绑定
@@ -243,6 +254,8 @@ namespace SR3DCameraDemo.ViewModel
             xinje.PLC.Connect();
             StatusPLC = true;
             HalconWindowVisibility = "Visible";
+
+            PNum = 0;
 
             ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
             try
@@ -308,7 +321,14 @@ namespace SR3DCameraDemo.ViewModel
                 }
             }
 
-                #endregion
+            #endregion
+            for (int i = 0; i < 5; i++)
+            {
+                if (!Directory.Exists(Path.Combine(System.Environment.CurrentDirectory,"Camera",i.ToString())))
+                {
+                    Directory.CreateDirectory(Path.Combine(System.Environment.CurrentDirectory, "Camera", i.ToString()));
+                }
+            }
             AddMessage("软件加载完成");
         }
 
@@ -425,7 +445,7 @@ namespace SR3DCameraDemo.ViewModel
                 case "3":
                     using (OpenFileDialog dlg = new OpenFileDialog())
                     {
-                        dlg.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+                        //dlg.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
                         dlg.Filter = "文本文件(*.ecd)|*.ecd";  //设置文件过滤
                        
                         dlg.Multiselect = false;              //禁止多选
@@ -471,11 +491,16 @@ namespace SR3DCameraDemo.ViewModel
                         metro.ChangeAccent("Light.Teal");
                         HalconWindowVisibility = "Visible";
                         ROI roi = Global.CameraImageViewer.DrawROI(ROI.ROI_TYPE_CIRCLE);
-                        roi.ROIColor = "green";
-                        roi.ROIId = 0;
-                        CameraROIList.Clear();
-                        CameraROIList.Add(roi);
-                        CameraRepaint = !CameraRepaint;
+                        var aa = roi.getRegion();
+                        HTuple area, row, column;
+                        HOperatorSet.AreaCenter(aa,out area, out row,out column);
+                        HOperatorSet.WriteTuple(row, Path.Combine(System.Environment.CurrentDirectory, "Camera", PNum.ToString(), "row.tup"));
+                        HOperatorSet.WriteTuple(column, Path.Combine(System.Environment.CurrentDirectory, "Camera", PNum.ToString(), "column.tup"));
+                        //Tuple<string, object> t = new Tuple<string, object>("Color", "green");
+                        //CameraGCStyle = t;
+                        HOperatorSet.SetColor(Global.CameraImageViewer.viewController.viewPort.HalconWindow, "green");
+                        HOperatorSet.DispCross(Global.CameraImageViewer.viewController.viewPort.HalconWindow, row, column, 30, 0);
+                        AddMessage($"OriginRow:{row.D:F0} OriginColumn:{column.D:F0}");
                     }
                     else
                     {
@@ -485,85 +510,189 @@ namespace SR3DCameraDemo.ViewModel
                     break;
                 
                 case "7":
-                    //if (pointCloudHead._width != 0 && CameraROIList.Count >= 2)
-                    //{
-                    //    TestPValue = CalcHeight((ROIRectangle1)CameraROIList.FirstOrDefault(_roi => _roi.ROIId == 0), HeightData, pointCloudHead, CameraIamge);
-                    //    FundPValue = CalcHeight((ROIRectangle1)CameraROIList.FirstOrDefault(_roi => _roi.ROIId == 1), HeightData, pointCloudHead, CameraIamge);
-                    //    DistPValue = TestPValue - FundPValue;
-                    //    AddMessage($"计算完成：{DistPValue:F3}");
-                    //}
-                    //else
-                    //{
-                    //    AddMessage("计算失败：无数据");
-                    //}
-                    var region = (ROICircle)CameraROIList.FirstOrDefault(_roi => _roi.ROIId == 0);
-                    if (region != null && pointCloudHead._width != 0 && CameraIamge != null)
+                    try
                     {
-                        HTuple width, height;
-                        HOperatorSet.GetImageSize(CameraIamge, out width, out height);
-                        double wscale = (double)pointCloudHead._width / width;
-                        double hscale = (double)pointCloudHead._height / height;
-                        double[,] dists = new double[hmList.Count, 2];
-                        for (int i = 0; i < hmList.Count; i++)
+                        HObject RoiRegion;
+                        HOperatorSet.ReadRegion(out RoiRegion, Path.Combine(System.Environment.CurrentDirectory, "Camera", PNum.ToString(), "RoiRegion.hobj"));
+                        HObject imageReduced;
+                        HOperatorSet.ReduceDomain(CameraIamge,RoiRegion,out imageReduced);
+                        HTuple ModelID;
+                        HOperatorSet.ReadShapeModel(Path.Combine(System.Environment.CurrentDirectory, "Camera", PNum.ToString(), "ShapeModel.shm"), out ModelID);
+                        HTuple row1, column1, angle1, score1;
+                        HOperatorSet.FindShapeModel(imageReduced, ModelID, (new HTuple(-180)).TupleRad(), (new HTuple(360)).TupleRad(), 0.5, 1, 0, "least_squares", 0, 0.9, out row1, out column1, out angle1, out score1);
+
+                        HTuple row, column, angle;
+                        HOperatorSet.ReadTuple(Path.Combine(System.Environment.CurrentDirectory, "Camera", PNum.ToString(), "SampleRow.tup"),out row);
+                        HOperatorSet.ReadTuple(Path.Combine(System.Environment.CurrentDirectory, "Camera", PNum.ToString(), "SampleColumn.tup"), out column);
+                        HOperatorSet.ReadTuple(Path.Combine(System.Environment.CurrentDirectory, "Camera", PNum.ToString(), "SampleAngle.tup"), out angle);
+                        HTuple homMat2D;
+                        HOperatorSet.VectorAngleToRigid(row, column, angle, row1, column1, angle1, out homMat2D);
+                        HObject sampleObject;
+                        HOperatorSet.ReadObject(out sampleObject, Path.Combine(System.Environment.CurrentDirectory, "Camera", PNum.ToString(), "Sample.hobj"));
+                        HObject sampleObjectAffineTrans;
+                        HOperatorSet.AffineTransRegion(sampleObject, out sampleObjectAffineTrans, homMat2D, "nearest_neighbor");
+                        HTuple originRow, originColumn;
+                        HOperatorSet.ReadTuple(Path.Combine(System.Environment.CurrentDirectory, "Camera", PNum.ToString(), "row.tup"),out originRow);
+                        HOperatorSet.ReadTuple(Path.Combine(System.Environment.CurrentDirectory, "Camera", PNum.ToString(), "column.tup"), out originColumn);
+                        HTuple originRow1, originColumn1;
+                        HOperatorSet.AffineTransPoint2d(homMat2D, originRow, originColumn,out originRow1,out originColumn1);
+
+                        Tuple<string, object> t = new Tuple<string, object>("Color", "green");
+                        CameraGCStyle = t;
+                        CameraAppendHObject = null;
+                        CameraAppendHObject = sampleObjectAffineTrans;
+                        CameraRepaint = !CameraRepaint;
+                        HOperatorSet.SetColor(Global.CameraImageViewer.viewController.viewPort.HalconWindow, "red");
+                        HOperatorSet.DispCross(Global.CameraImageViewer.viewController.viewPort.HalconWindow, originRow1, originColumn1, 30, 0);
+
+                        AddMessage($"Row:{row1.D:F0} Column:{column1.D:F0} Angle:{angle1.TupleDeg().D:F0} Score:{score1.D:F2}");
+                        AddMessage($"OriginRow:{originRow1.D:F0} OriginColumn:{originColumn1.D:F0}");
+
+                        if (pointCloudHead._width != 0 && CameraIamge != null)
                         {
-                            dists[i, 0] = hmList[i].x / pointCloudHead._xInterval;
-                            dists[i, 1] = hmList[i].y / pointCloudHead._yInterval;
-                        }
-                        HTuple x = new HTuple(), y = new HTuple(), z = new HTuple();
-                        HOperatorSet.SetColor(Global.CameraImageViewer.viewController.viewPort.HalconWindow, "green");
-                        for (int i = 0; i < hmList.Count; i++)
-                        {
-                            HOperatorSet.DispCross(Global.CameraImageViewer.viewController.viewPort.HalconWindow, region.midR + dists[i, 0] / hscale, region.midC - dists[i, 1] / wscale, 30, 0);
-                            double[] rst = Get3DPoint(HeightData, pointCloudHead, CameraIamge, region.midR + dists[i, 0] / hscale, region.midC - dists[i, 1] / wscale);
-                            AddMessage($"{rst[0]},{rst[1]},{rst[2]}");
-                            x = x.TupleConcat(rst[0]);
-                            y = y.TupleConcat(rst[1]);
-                            z = z.TupleConcat(rst[2]);
-                        }
-                        HTuple objectModel3D;
-                        HOperatorSet.GenObjectModel3dFromPoints(x, y, z, out objectModel3D);
-                        HTuple ParFitting = new HTuple("primitive_type", "fitting_algorithm", "output_xyz_mapping");
-                        HTuple ValFitting = new HTuple("plane", "least_squares_tukey", "true");
-                        HTuple objectModel3DOut;
-                        HOperatorSet.FitPrimitivesObjectModel3d(objectModel3D, ParFitting, ValFitting,out objectModel3DOut);
-                        HTuple primitive_parameter;
-                        HOperatorSet.GetObjectModel3dParams(objectModel3DOut, "primitive_parameter",out primitive_parameter);
-                        HTuple center;
-                        HOperatorSet.GetObjectModel3dParams(objectModel3DOut, "center", out center);
-                        HTuple a = primitive_parameter[0];
-                        HTuple b = primitive_parameter[1];
-                        HTuple c = primitive_parameter[2];
-                        HTuple d = -1 * center[0] * a - center[1] * b - center[2] * c;
-                        HTuple minD = 9999;HTuple maxD = -9999;
-                        for (int i = 0; i < hmList.Count; i++)
-                        {
-                            HTuple D = a * x[i] + b * y[i] + c * z[i] + d;
-                            if (minD > D)
+                            HTuple width, height;
+                            HOperatorSet.GetImageSize(CameraIamge, out width, out height);
+                            double wscale = (double)pointCloudHead._width / width;
+                            double hscale = (double)pointCloudHead._height / height;
+                            double[,] dists = new double[hmList.Count, 2];
+                            for (int i = 0; i < hmList.Count; i++)
                             {
-                                minD = D;
+                                dists[i, 0] = hmList[i].x / pointCloudHead._xInterval;
+                                dists[i, 1] = hmList[i].y / pointCloudHead._yInterval;
                             }
-                            if (maxD < D)
+                            HTuple x = new HTuple(), y = new HTuple(), z = new HTuple();
+                            HOperatorSet.SetColor(Global.CameraImageViewer.viewController.viewPort.HalconWindow, "green");
+                            for (int i = 0; i < hmList.Count; i++)
                             {
-                                maxD = D;
+                                HOperatorSet.DispCross(Global.CameraImageViewer.viewController.viewPort.HalconWindow, originRow1 + dists[i, 0] / hscale, originColumn1 - dists[i, 1] / wscale, 30, 0);
+                                double[] rst = Get3DPoint(HeightData, pointCloudHead, CameraIamge, originRow1 + dists[i, 0] / hscale, originColumn1 - dists[i, 1] / wscale);
+                                //AddMessage($"{rst[0]},{rst[1]},{rst[2]}");
+                                x = x.TupleConcat(rst[0]);
+                                y = y.TupleConcat(rst[1]);
+                                z = z.TupleConcat(rst[2]);
                             }
-                        }
-                        DistPValue = maxD - minD;
-                        double Sqrt = Math.Sqrt(Math.Pow(a,2) + Math.Pow(b, 2) + Math.Pow(c, 2));
-                        Point3Ds.Clear();
-                        for (int i = 0; i < hmList.Count; i++)
-                        {
-                            double d2 = Math.Abs((a * x[i] + b * y[i] + c * z[i] + d).D);
-                            AddMessage((d2 / Sqrt).ToString());
-                            Point3Ds.Add(new Point3DViewModel()
+                            HTuple objectModel3D;
+                            HOperatorSet.GenObjectModel3dFromPoints(x, y, z, out objectModel3D);
+                            HTuple ParFitting = new HTuple("primitive_type", "fitting_algorithm", "output_xyz_mapping");
+                            HTuple ValFitting = new HTuple("plane", "least_squares_tukey", "true");
+                            HTuple objectModel3DOut;
+                            HOperatorSet.FitPrimitivesObjectModel3d(objectModel3D, ParFitting, ValFitting, out objectModel3DOut);
+                            HTuple primitive_parameter;
+                            HOperatorSet.GetObjectModel3dParams(objectModel3DOut, "primitive_parameter", out primitive_parameter);
+                            HTuple center;
+                            HOperatorSet.GetObjectModel3dParams(objectModel3DOut, "center", out center);
+                            HTuple a = primitive_parameter[0];
+                            HTuple b = primitive_parameter[1];
+                            HTuple c = primitive_parameter[2];
+                            HTuple d = -1 * center[0] * a - center[1] * b - center[2] * c;
+                            HTuple minD = 9999; HTuple maxD = -9999;
+                            for (int i = 0; i < hmList.Count; i++)
                             {
-                                ID = i + 1,
-                                X = x[i],
-                                Y = y[i],
-                                Z = z[i],
-                                Dist = d2 / Sqrt
-                            });
+                                HTuple D = a * x[i] + b * y[i] + c * z[i] + d;
+                                if (minD > D)
+                                {
+                                    minD = D;
+                                }
+                                if (maxD < D)
+                                {
+                                    maxD = D;
+                                }
+                            }
+                            DistPValue = maxD - minD;
+                            double Sqrt = Math.Sqrt(Math.Pow(a, 2) + Math.Pow(b, 2) + Math.Pow(c, 2));
+                            Point3Ds.Clear();
+                            for (int i = 0; i < hmList.Count; i++)
+                            {
+                                //double d2 = Math.Abs((a * x[i] + b * y[i] + c * z[i] + d).D);
+                                double d2 = (a * x[i] + b * y[i] + c * z[i] + d).D;
+                                //AddMessage((d2 / Sqrt).ToString());
+                                Point3Ds.Add(new Point3DViewModel()
+                                {
+                                    ID = i + 1,
+                                    X = x[i],
+                                    Y = y[i],
+                                    Z = z[i],
+                                    Dist = d2 / Sqrt
+                                });
+                            }
+
                         }
-                            
+                    }
+                    catch (Exception ex)
+                    {
+                        AddMessage(ex.Message);
+                    }
+
+
+                    
+                    break;
+                case "8":
+                    metro.ChangeAccent("Dark.Red");
+                    HalconWindowVisibility = "Collapsed";
+                    r = await metro.ShowConfirm("确认", "请确认需要重画范围吗？");
+                    if (r)
+                    {
+                        metro.ChangeAccent("Light.Teal");
+                        HalconWindowVisibility = "Visible";
+                        ROI roi = Global.CameraImageViewer.DrawROI(ROI.ROI_TYPE_RECTANGLE1);
+                        var aa = roi.getRegion();
+                        HOperatorSet.WriteRegion(aa, Path.Combine(System.Environment.CurrentDirectory, "Camera", PNum.ToString(), "RoiRegion.hobj"));
+                        Tuple<string, object> t = new Tuple<string, object>("Color", "red");
+                        CameraGCStyle = t;
+                        CameraAppendHObject = null;
+                        CameraAppendHObject = aa;
+                        CameraRepaint = !CameraRepaint;
+                    }
+                    else
+                    {
+                        metro.ChangeAccent("Light.Teal");
+                        HalconWindowVisibility = "Visible";
+                    }
+                    break;
+                case "9":
+                    metro.ChangeAccent("Dark.Red");
+                    HalconWindowVisibility = "Collapsed";
+                    r = await metro.ShowConfirm("确认", "请确认需要重画模板吗？");
+                    if (r)
+                    {
+                        metro.ChangeAccent("Light.Teal");
+                        HalconWindowVisibility = "Visible";
+                        try
+                        {
+                            ROI roi = Global.CameraImageViewer.DrawROI(ROI.ROI_TYPE_REGION);
+                            HObject ReduceDomainImage;
+                            HOperatorSet.ReduceDomain(CameraIamge, roi.getRegion(), out ReduceDomainImage);
+                            HObject modelImages, modelRegions;
+                            HOperatorSet.InspectShapeModel(ReduceDomainImage, out modelImages, out modelRegions, 7, 30);
+                            HObject objectSelected;
+                            HOperatorSet.SelectObj(modelRegions, out objectSelected, 1);
+                            Tuple<string, object> t = new Tuple<string, object>("Color", "green");
+                            CameraGCStyle = t;
+                            CameraAppendHObject = null;
+                            CameraAppendHObject = objectSelected;
+                            CameraRepaint = !CameraRepaint;
+                            HTuple ModelID;
+                            HOperatorSet.CreateShapeModel(ReduceDomainImage, 7, (new HTuple(-180)).TupleRad(), (new HTuple(360)).TupleRad(), (new HTuple(0.1)).TupleRad(), "no_pregeneration", "use_polarity", 30, 10, out ModelID);
+                            HTuple row, column, angle, score;
+                            HOperatorSet.FindShapeModel(CameraIamge, ModelID, (new HTuple(-180)).TupleRad(), (new HTuple(360)).TupleRad(), 0.5, 1, 0, "least_squares", 0, 0.9, out row, out column, out angle, out score);
+                            objectSelected.WriteObject(Path.Combine(System.Environment.CurrentDirectory, "Camera", PNum.ToString(), "Sample.hobj"));
+                            row.WriteTuple(Path.Combine(System.Environment.CurrentDirectory, "Camera", PNum.ToString(), "SampleRow.tup"));
+                            column.WriteTuple(Path.Combine(System.Environment.CurrentDirectory, "Camera", PNum.ToString(), "SampleColumn.tup"));
+                            angle.WriteTuple(Path.Combine(System.Environment.CurrentDirectory, "Camera", PNum.ToString(), "SampleAngle.tup"));
+                            HOperatorSet.WriteShapeModel(ModelID, Path.Combine(System.Environment.CurrentDirectory, "Camera", PNum.ToString(), "ShapeModel.shm"));
+                            AddMessage($"Row:{row.D:F0} Column:{column.D:F0} Angle:{angle.D:F0}");
+                        }
+                        catch (Exception ex)
+                        {
+                            AddMessage(ex.Message);
+                        }  
+
+
+                    }
+                    else
+                    {
+                        metro.ChangeAccent("Light.Teal");
+                        HalconWindowVisibility = "Visible";
                     }
                     break;
                 default:
